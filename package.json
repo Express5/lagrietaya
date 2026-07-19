@@ -1,1 +1,5 @@
-
+{
+  "name": "proxy-cors",
+  "version": "1.0.0",
+  "main": "api/proxy.js"
+}
