@@ -1,5 +1,4 @@
 module.exports = async function handler(req, res) {
-  // Extraemos el ID de ?id=... O de la ruta /post/EL_ID
   let id = req.query.id;
   if (!id && req.url) {
     const partes = req.url.split('?')[0].split('/');
@@ -11,18 +10,48 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    // Usamos la API REST de Firestore
     const urlFirestore = `https://firestore.googleapis.com/v1/projects/la-grieta-71193/databases/(default)/documents/articulos/${id}`;
     const respuesta = await fetch(urlFirestore);
 
     if (!respuesta.ok) throw new Error('Artículo no encontrado en Firestore');
 
-    const datos = await respuesta.json();
-    const campos = datos.fields || {};
-
-    const titulo = campos.titulo?.stringValue || 'La Grieta';
-    const resumen = campos.resumen?.stringValue || campos.subtitulo?.stringValue || 'Descubre este artículo en La Grieta.';
+    const documento = await respuesta.json();
     
-    let imagen = (campos.url?.stringValue || campos.thumbnail?.stringValue || campos.imagen?.stringValue || '').trim();
+    // Función auxiliar para limpiar el formato de Firestore REST v1 a un objeto plano
+    function parseFirestoreFields(fields) {
+      if (!fields) return {};
+      const obj = {};
+      for (const [key, value] of Object.entries(fields)) {
+        if (value.stringValue !== undefined) obj[key] = value.stringValue;
+        else if (value.integerValue !== undefined) obj[key] = Number(value.integerValue);
+        else if (value.doubleValue !== undefined) obj[key] = Number(value.doubleValue);
+        else if (value.booleanValue !== undefined) obj[key] = value.booleanValue;
+        else if (value.mapValue !== undefined) obj[key] = parseFirestoreFields(value.mapValue.fields);
+        else if (value.arrayValue !== undefined) obj[key] = (value.arrayValue.values || []).map(v => v.stringValue || v);
+      }
+      return obj;
+    }
+
+    const art = parseFirestoreFields(documento.fields);
+
+    const titulo = art.titulo || 'La Grieta';
+    const resumen = art.resumen || art.subtitulo || 'Descubre este artículo en La Grieta.';
+    
+    // Buscamos la imagen exactamente igual que lo hace tu index.html
+    let imagen = art.url || art.thumbnail || art.imagen || art.portada || art.foto || '';
+
+    // Si aún así no la encontramos, buscamos cualquier propiedad que parezca una imagen
+    if (!imagen) {
+      for (const val of Object.values(art)) {
+        if (typeof val === 'string' && (val.startsWith('http') || val.includes('.jpg') || val.includes('.png') || val.includes('.webp') || val.includes('.jfif') || val.includes('cloudinary'))) {
+          imagen = val;
+          break;
+        }
+      }
+    }
+
+    imagen = typeof imagen === 'string' ? imagen.trim() : '';
 
     if (imagen && !imagen.startsWith('http')) {
       imagen = `https://lagrietaapp.org/${imagen.replace(/^\//, '')}`;
@@ -55,7 +84,7 @@ module.exports = async function handler(req, res) {
 </head>
 <body>
     <script>
-        window.location.replace("https://lagrietaapp.org/?id=${id}");
+        window.location.replace("https://lagrietaapp.org/?id=" + "${id}");
     </script>
     <p>Redirigiendo a <a href="https://lagrietaapp.org/?id=${id}">${safeTitulo}</a>...</p>
 </body>
