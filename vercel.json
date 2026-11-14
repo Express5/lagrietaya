@@ -1,18 +1,18 @@
 {
-  "routes": [
+  "rewrites": [
     {
-      "src": "/",
+      "source": "/",
       "has": [
         {
           "type": "query",
           "key": "id"
         }
       ],
-      "dest": "/api/share.js"
+      "destination": "/api/share.js"
     },
     {
-      "src": "/api/proxy",
-      "dest": "/api/proxy.js"
+      "source": "/api/proxy",
+      "destination": "/api/proxy.js"
     }
   ]
 }
