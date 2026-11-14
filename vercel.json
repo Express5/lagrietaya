@@ -8,11 +8,11 @@
           "key": "id"
         }
       ],
-      "destination": "/api/article-share.js"
+      "destination": "/api/article-share"
     },
     {
       "source": "/api/proxy",
-      "destination": "/api/proxy.js"
+      "destination": "/api/proxy"
     }
   ]
 }
