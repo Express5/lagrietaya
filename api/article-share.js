@@ -1,34 +1,25 @@
-const fs = require('fs');
-const path = path = require('path');
-
 module.exports = async function handler(req, res) {
   const { id } = req.query;
 
   if (!id) {
-    return res.redirect('/');
+    return res.redirect(302, 'https://lagrietaapp.org/');
   }
 
   try {
-    // 1. Buscamos el artículo en Firebase (API REST)
+    // 1. Buscamos el artículo directamente en la API REST de Firestore
     const urlFirestore = `https://firestore.googleapis.com/v1/projects/la-grieta-71193/databases/(default)/documents/articulos/${id}`;
     const respuesta = await fetch(urlFirestore);
 
-    if (!respuesta.ok) throw new Error('Artículo no encontrado');
+    if (!respuesta.ok) throw new Error('Artículo no encontrado en Firestore');
 
     const datos = await respuesta.json();
-    const campos = datos.fields;
+    const campos = datos.fields || {};
 
-    // 2. Extraemos los datos de forma segura
-    const titulo = (campos && campos.titulo && campos.titulo.stringValue) ? campos.titulo.stringValue : 'La Grieta';
+    // 2. Extraemos los campos de forma segura
+    const titulo = campos.titulo?.stringValue || 'La Grieta';
+    const resumen = campos.resumen?.stringValue || campos.subtitulo?.stringValue || 'Descubre este artículo en La Grieta.';
     
-    let resumen = 'Descubre este artículo en La Grieta.';
-    if (campos && campos.resumen && campos.resumen.stringValue) resumen = campos.resumen.stringValue;
-    else if (campos && campos.subtitulo && campos.subtitulo.stringValue) resumen = campos.subtitulo.stringValue;
-
-    let imagen = '';
-    if (campos && campos.url && campos.url.stringValue) imagen = campos.url.stringValue;
-    else if (campos && campos.thumbnail && campos.thumbnail.stringValue) imagen = campos.thumbnail.stringValue;
-    else if (campos && campos.imagen && campos.imagen.stringValue) imagen = campos.imagen.stringValue;
+    let imagen = campos.url?.stringValue || campos.thumbnail?.stringValue || campos.imagen?.stringValue || '';
 
     if (imagen && !imagen.startsWith('http')) {
       imagen = `https://lagrietaapp.org/${imagen.replace(/^\//, '')}`;
@@ -37,15 +28,15 @@ module.exports = async function handler(req, res) {
       imagen = 'https://lagrietaapp.org/lagrietaheader.jpg';
     }
 
-    const safeTitulo = titulo.replace(/"/g, '&quot;');
-    const safeResumen = resumen.replace(/"/g, '&quot;');
+    const safeTitulo = titulo.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const safeResumen = resumen.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-    // 3. Leemos el index.html
-    const htmlPath = path.join(process.cwd(), 'index.html');
-    let html = fs.readFileSync(htmlPath, 'utf8');
-
-    // 4. Preparamos las nuevas etiquetas Open Graph
-    const ogTags = `
+    // 3. Generamos un HTML estricto con las etiquetas Open Graph para WhatsApp (sin depender de leer archivos locales)
+    const htmlResponse = `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>${safeTitulo} · La grieta</title>
     <meta property="og:title" content="${safeTitulo}" />
     <meta property="og:description" content="${safeResumen}" />
     <meta property="og:image" content="${imagen}" />
@@ -55,27 +46,24 @@ module.exports = async function handler(req, res) {
     <meta name="twitter:title" content="${safeTitulo}">
     <meta name="twitter:description" content="${safeResumen}">
     <meta name="twitter:image" content="${imagen}">
-    `;
+    <!-- Redirección automática inmediata para usuarios reales que entren al enlace -->
+    <meta http-equiv="refresh" content="0;url=https://lagrietaapp.org/?id=${id}">
+</head>
+<body>
+    <script>
+        window.location.replace("https://lagrietaapp.org/?id=" + "${id}");
+    </script>
+    <p>Redirigiendo a <a href="https://lagrietaapp.org/?id=${id}">${safeTitulo}</a>...</p>
+</body>
+</html>`;
 
-    // 5. Inyección segura reemplazando el bloque o insertándolo antes del </head>
-    if (html.includes('<meta property="og:title"')) {
-      // Reemplazamos las etiquetas viejas por las nuevas de golpe
-      html = html.replace(/<meta property="og:title"[^>]*>/g, ogTags);
-      // Limpiamos las descripciones sueltas si las hubiera para que no se dupliquen
-      html = html.replace(/<meta property="og:description"[^>]*>/g, '');
-      html = html.replace(/<meta property="og:url"[^>]*>/g, '');
-    } else {
-      html = html.replace('</head>', `${ogTags}\n</head>`);
-    }
-
-    // 6. Entregamos el HTML modificado al bot de WhatsApp / navegador
+    // 4. Devolvemos el HTML con las cabeceras ideales para los bots y la caché
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    // Cabecera para evitar que Vercel guarde una caché vieja si cambias de artículo
-    res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate');
-    return res.status(200).send(html);
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
+    return res.status(200).send(htmlResponse);
 
   } catch (error) {
     console.error('Error en article-share.js:', error);
-    return res.redirect('/');
+    return res.redirect(302, 'https://lagrietaapp.org/');
   }
 };
