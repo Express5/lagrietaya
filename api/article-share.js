@@ -59,6 +59,13 @@ module.exports = async function handler(req, res) {
     if (imagen.startsWith('http://')) {
       imagen = imagen.replace('http://', 'https://');
     }
+
+    // 🚀 OPTIMIZACIÓN CLOUDINARY PARA WHATSAPP:
+    // Redimensiona, comprime y fuerza JPG para que las imágenes gigantes o en formato extraño no fallen.
+    if (imagen.includes('cloudinary.com') && imagen.includes('/upload/')) {
+      imagen = imagen.replace('/upload/', '/upload/w_1200,h_630,c_fill,q_auto,f_jpg/');
+    }
+
     if (!imagen) {
       imagen = 'https://lagrietaapp.org/lagrietaheader.jpg';
     }
