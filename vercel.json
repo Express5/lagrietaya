@@ -1,5 +1,18 @@
 {
   "routes": [
-    { "src": "/api/proxy", "dest": "/api/proxy.js" }
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "id"
+        }
+      ],
+      "dest": "/api/share.js"
+    },
+    {
+      "src": "/api/proxy",
+      "dest": "/api/proxy.js"
+    }
   ]
 }
